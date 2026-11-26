@@ -117,7 +117,7 @@ This is a proposed structure, not a list of files already implemented:
 | `results/` | Generated figures, tables, and model summaries |
 | `renv.lock` | Shared package versions, once initialized |
 
-Data-download instructions, package setup, and render commands will be added when implemented. Avoid committing large model objects, caches, or temporary outputs.
+Data acquisition and the cleaning audit are now implemented. See [data setup and run commands](data/README.md), the [R Markdown audit](analysis/01_cleaning_audit.Rmd), and the [audit findings](docs/cleaning_audit_findings.md). The final report, model notebooks, shared splits, and package lock are still planned. Avoid committing large model objects, caches, or temporary outputs.
 
 This repository is public. Keep private course materials, credentials, and personal files out of it. Names and NetIDs are required in the submitted report; do not add teammates' NetIDs to public files without their agreement.
 
@@ -135,10 +135,11 @@ All four members contribute to analysis, interpretation, and review. Responsibil
 
 ## Current status and next steps
 
-**Planning is complete; analysis implementation has not started.** This README records the agreed scope and does not report model results.
+**Data acquisition and the cleaning audit are implemented; modeling has not started.** All 101,766 encounters remain in the audit data. Exclusion scenarios are documented for review, not applied. This README does not report model results.
 
-1. Implement reproducible data acquisition and the cleaning audit.
+1. Review the [cleaning audit findings](docs/cleaning_audit_findings.md).
 2. Agree on cohort exclusions, predictors, and the primary comparison criterion.
 3. Save shared patient-level test and cross-validation assignments.
 4. Build the HTML exploration notebook and fit the baseline and logistic model.
 5. Add LDA and the spline extension, compare results, and write the report.
+
