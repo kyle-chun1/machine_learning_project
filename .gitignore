@@ -1,0 +1,15 @@
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+.DS_Store
+data/raw/*
+!data/raw/.gitkeep
+data/derived/
+results/
+renv/library/
+renv/staging/
+*_cache/
+*_files/
+*.RDS
+*.rds
