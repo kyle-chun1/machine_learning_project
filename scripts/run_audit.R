@@ -1,0 +1,6 @@
+source("R/data_io.R")
+source("R/cleaning_audit.R")
+audit <- run_audit()
+print(audit$overview, row.names = FALSE)
+print(audit$missingness[audit$missingness$normalized_missing > 0, ], row.names = FALSE)
+cat("\nAudit tables: results/audit/\nAll encounters retained; cohort scenarios are proposals only.\n")

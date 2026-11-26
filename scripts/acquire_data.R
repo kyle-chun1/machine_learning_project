@@ -1,0 +1,6 @@
+source("R/data_io.R")
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) > 1L) stop("Usage: Rscript scripts/acquire_data.R [local-uci-zip]")
+acquire_data(if (length(args)) args[[1]] else NULL)
+print(verify_raw(), row.names = FALSE)
+cat("Verified original UCI files; existing matching files were left unchanged.\n")
