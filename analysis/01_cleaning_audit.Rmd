@@ -1,0 +1,167 @@
+---
+title: "30-Day Readmission: Data Acquisition and Cleaning Audit"
+subtitle: "STSCI 3740 | Data quality checkpoint"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: hide
+    theme: readable
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = FALSE,
+                      fig.width = 9, fig.height = 5, dpi = 120)
+# The render entry point sets knit_root_dir to the repository root.
+source("R/data_io.R")
+source("R/cleaning_audit.R")
+audit <- run_audit()
+library(ggplot2)
+knitr::opts_chunk$set(fig.align = "center")
+```
+
+# Scope
+
+This checkpoint audits the source and makes minimal, deterministic coding
+changes. **It does not finalize the modeling cohort, select predictors, fit
+models, impute values, or create train/test splits.** All encounters remain
+in the normalized audit data. No patient-level rows are displayed here.
+
+The target is 1 for source label `<30`, and 0 for `>30` or `NO`. This is
+less-than-30-day readmission as coded by the source, rather than a claim about
+all readmissions across all hospitals. `NO` denotes no recorded readmission.
+
+# Source integrity
+
+The original UCI files are left unchanged and verified against committed
+SHA-256 checksums before every audit. The archive contains two CSV files.
+The mapping file contains **three separate header-delimited tables**; the
+reader parses them separately and preserves quoted descriptions containing commas.
+
+```{r provenance}
+knitr::kable(verify_raw(), caption = "Original source files and SHA-256 checksums")
+```
+
+Source: [UCI dataset 296](https://archive.ics.uci.edu/dataset/296/diabetes-130-us-hospitals-for-years-1999-2008).
+Dataset DOI: [10.24432/C5230J](https://doi.org/10.24432/C5230J). License: CC BY 4.0.
+Background: Strack et al. (2014),
+[10.1155/2014/781670](https://doi.org/10.1155/2014/781670).
+
+# Encounters and repeated patients
+
+```{r overview}
+knitr::kable(audit$overview, caption = "Source dimensions, identifiers, and repeated encounters")
+```
+
+There are `r format(audit$overview$value[audit$overview$measure == "unique_patients"], big.mark = ",")`
+distinct patients. A repeated patient is not a duplicate encounter. Retain
+these encounters for now, then keep all encounters for each patient together
+in the future test split and cross-validation folds. IDs remain character
+strings and are tracking variables, not predictors. Encounter IDs are not
+treated as validated dates or a basis for temporal validation.
+
+# Missingness and normalization
+
+```{r missing-table}
+m <- audit$missingness
+knitr::kable(m[m$normalized_missing > 0, ], digits = 2,
+             caption = "Explicit missing-value codes; no imputation has been applied")
+```
+
+```{r missing-plot}
+shown <- m[m$normalized_missing > 0, ]
+ggplot(shown, aes(reorder(variable, missing_percent), missing_percent)) +
+  geom_col(fill = "#436B83") + coord_flip() +
+  scale_y_continuous(limits = c(0, 100), breaks = seq(0, 100, 20)) +
+  labs(x = NULL, y = "Missing (%)", title = "Missingness varies substantially across fields") +
+  theme_minimal(base_size = 13)
+```
+
+Applied rules:
+
+- Convert the literal `?` to R `NA`.
+- Convert `Unknown/Invalid` in gender to `NA`; retain these encounters.
+- Preserve the literal `None` category in `A1Cresult` and `max_glu_serum`.
+  It represents a test not performed, rather than an empty numeric value.
+- Store the eight count/length variables as integers. Store categorical
+  predictors, including admission/discharge codes and age intervals, as factors.
+  Keep diagnosis codes categorical; do not coerce ICD codes to continuous numbers.
+- Retain source outcome `readmitted` for audit, and add binary `early_readmission`.
+  Neither outcome may appear among model predictors.
+
+Weight is a candidate for omission because of extreme missingness. Specialty
+and payer information also require a deliberate missing-data strategy. These
+are recommendations for review, not implemented predictor exclusions. Any
+data-dependent choice of omission/pooling thresholds, factor vocabularies,
+imputation values, scaling, spline knots, or feature selection must be learned
+within training folds. The full-source normalized RDS is **audit-only**, not
+a model matrix; rebuild factor levels and preprocessing within each fold.
+
+# Target coding check
+
+```{r target}
+knitr::kable(audit$outcome, digits = 2, caption = "Source outcome labels (full-data descriptive audit)")
+```
+
+Early readmission accounts for
+`r sprintf("%.2f%%", 100 * mean(audit$normalized$early_readmission))` of source encounters.
+This full-source summary checks label coding. It is not an estimate of
+validation or test performance. Class balance motivates reporting sensitivity
+and precision alongside overall classification error. Predictor-outcome plots
+will use training data only after shared splits are fixed.
+
+# Category mappings and quality flags
+
+```{r flags}
+knitr::kable(audit$flags, caption = "Issues and cohort-relevant flags; categories can overlap")
+```
+
+```{r unknown-codes}
+u <- audit$mapping_counts
+knitr::kable(u[u$unknown_description, ],
+             caption = "Mapped codes with unknown/unavailable meanings, plus any unmapped codes")
+```
+
+The literal `NULL` in the mapping is a dictionary description, not an R null.
+These codes stay as distinct source categories at this stage. Model-time
+handling is still to be agreed. All observed admission/discharge codes are
+checked against the supplied dictionary; an unrecognized code is reported
+without inventing its meaning. Full mapping counts and categorical-level
+counts are saved as CSVs for review.
+
+# Proposed cohort scenarios
+
+```{r cohort}
+knitr::kable(audit$cohort_scenarios, caption = "Alternative cohorts: counts only, not applied exclusions")
+```
+
+The supplied dictionary labels codes **11, 19, 20, 21** as expired and
+**13, 14** as hospice. Excluding expired discharges is appropriate to consider
+for a discharge-time readmission target. Hospice exclusion is a separate
+scope decision: hospice does not itself make readmission impossible.
+We therefore show both scenarios and preserve every source encounter.
+
+No records are dropped because a diagnosis, demographic field, weight, payer,
+or specialty is missing. No first-encounter-only restriction is applied.
+All four team members should use the same agreed cohort once finalized.
+
+# Outputs and next decisions
+
+Generated locally (ignored by Git):
+
+- `results/audit/`: aggregate tables, source checksums, provenance, session
+  information, and this rendered HTML.
+- `data/derived/normalized_audit_only.rds`: all source encounters after the
+  deterministic normalization above; identifiers and both outcome forms remain.
+
+Before modeling, agree on the cohort, predictor set, missing-category handling,
+and primary comparison metric. Then freeze shared patient-level splits and
+fold assignments before outcome-focused exploration or model tuning.
+
+# Reproducibility
+
+```{r session}
+sessionInfo()
+```
